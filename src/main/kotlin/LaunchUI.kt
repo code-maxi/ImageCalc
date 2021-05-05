@@ -5,7 +5,7 @@ class LaunchUI {
         lateinit var params: Array<String>
         @JvmStatic
         fun main(args: Array<String>) {
-            params = args// + "/home/maximilian/Programmieren/aster/src/main/resources/images"
+            params = args
             Application.launch(ImageCalcStart::class.java, *args)
         }
     }

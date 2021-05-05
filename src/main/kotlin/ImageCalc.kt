@@ -42,7 +42,6 @@ class ImageCalcStart : App(ImageCalc::class) {
 
 data class Point(var x: Double, var y: Double) : Serializable {
     infix fun length(p: Point) = kotlin.math.sqrt((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y))
-    fun json() = "{ \"x\": $x, \"y\": $y }"
 
     fun l() = kotlin.math.sqrt(x * x + y * y)
     fun a() = atan2(y, x)
@@ -153,7 +152,7 @@ class ImageCalc : View("ImageCalc") {
     var snap: Point? = null
 
     var pathCount = 1
-    val paths = observableListOf<ImagePath>()
+    private val paths = observableListOf<ImagePath>()
     lateinit var pathView: ListView<ImagePath>
     var selectedPath: ImagePath? = null
     var selectedPaths = observableListOf<ImagePath>()
@@ -204,19 +203,19 @@ class ImageCalc : View("ImageCalc") {
             flowpane {
                 hgap = 10.0
                 vgap = 10.0
-                posCheck = checkbox("Position") { isSelected = true; action { canvas.paint() } }
-                lengthCheck = checkbox("Länge") { isSelected = true; action { canvas.paint() } }
-                numberCheck = checkbox("Nummer") { isSelected = true; action { canvas.paint() } }
-                lineCheck = checkbox("Linie") { isSelected = true; action { canvas.paint() } }
-                pointCheck = checkbox("Punkte") { isSelected = true; action { canvas.paint() } }
-                onlyCurrent = checkbox("Nur Aktuelles") { isSelected = true; action { canvas.paint() } }
-                snapCheck = checkbox("Snap") { isSelected = true; action { canvas.paint() } }
+                posCheck = checkbox("position") { isSelected = true; action { canvas.paint() } }
+                lengthCheck = checkbox("length") { isSelected = true; action { canvas.paint() } }
+                numberCheck = checkbox("number") { isSelected = true; action { canvas.paint() } }
+                lineCheck = checkbox("line") { isSelected = true; action { canvas.paint() } }
+                pointCheck = checkbox("points") { isSelected = true; action { canvas.paint() } }
+                onlyCurrent = checkbox("only current") { isSelected = true; action { canvas.paint() } }
+                snapCheck = checkbox("snap") { isSelected = true; action { canvas.paint() } }
             }
 
             hbox {
                 spacing = 10.0
-                wField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Breite" }
-                hField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Höhe" }
+                wField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Width" }
+                hField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Height" }
                 txField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "X" }
                 tyField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Y" }
                 nachkomma = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "x.[n]" }
@@ -227,14 +226,13 @@ class ImageCalc : View("ImageCalc") {
                 hgrow = Priority.ALWAYS
 
                 te = textarea("""
-                Dies ist ein Beilspiel-Codepattern. 
-                Es zeigt die Eigenschaften des aktuellen Bildes und 
-                die Pfade mit deren Punkten...
+                This is an example code pattern.
+                It shows the properties of the current image and the paths with their points.
                 
-                Name: #{name}
-                Pfad: #{path}
-                Typ: #{extension}
-                Auflösung: #{iw}px x #{ih}px
+                name: #{name}
+                path: #{path}
+                extension: #{extension}
+                resolution: #{rw}px x #{rh}px
                     
                 <#{n} (Farbe: #{c} | Gruppe: '#{g}'):
                     `Punkt #{i}: (#{x} | #{y})
@@ -246,7 +244,7 @@ class ImageCalc : View("ImageCalc") {
 
                     prefHeight = 300.0
 
-                    promptText = "Code-Pattern für die Erzeugung..."
+                    promptText = "code pattern"
                     font = Font.font("monospace")
                     textProperty().onChange { reload() }
                 }
@@ -254,7 +252,7 @@ class ImageCalc : View("ImageCalc") {
                     hgrow = Priority.ALWAYS
                     vgrow = Priority.ALWAYS
 
-                    promptText = "Ergebnis vom Code-Pattern..."
+                    promptText = "result"
                     isEditable = false
                     font = Font.font("monospace")
                 }
@@ -270,7 +268,7 @@ class ImageCalc : View("ImageCalc") {
                         hgrow = Priority.ALWAYS
                         vgrow = Priority.ALWAYS
 
-                        promptText = "Codierte Daten"
+                        promptText = "coded data"
                         font = Font.font("monospace")
                         isWrapText = true
 
@@ -282,7 +280,7 @@ class ImageCalc : View("ImageCalc") {
                         }
                     }
 
-                    button("Aktualisieren") {
+                    button("update") {
                         action {
                             decodePaths()
                             reload()
@@ -330,15 +328,15 @@ class ImageCalc : View("ImageCalc") {
                 hbox {
                     alignment = Pos.CENTER_LEFT
                     spacing = 5.0
-                    button("Entfernen") {
+                    button("remove") {
                         action { tree.selectionModel.selectedItems.forEach {
                             it.parent?.let { p ->
                                 Platform.runLater { p.children.remove(it) }
                             }
                         } }
                     }
-                    val folderCheck = CheckBox("Ordner")
-                    button("Öffnen") { action { loadImagesDialog(false, folderCheck.isSelected) } }
+                    val folderCheck = CheckBox("folder")
+                    button("open") { action { loadImagesDialog(false, folderCheck.isSelected) } }
                     this += folderCheck
                 }
             }
@@ -373,7 +371,7 @@ class ImageCalc : View("ImageCalc") {
                     items.onChange { reload() }
                 }
 
-                visiblePath = checkbox("Sichtbar") {
+                visiblePath = checkbox("visible") {
                     action {
                         Platform.runLater {
                             pathView.selectionModel.selectedItems?.forEach { it.visible = isSelected }
@@ -388,7 +386,7 @@ class ImageCalc : View("ImageCalc") {
                     hgrow = Priority.ALWAYS
                     pathName = textfield {
                         hgrow = Priority.ALWAYS
-                        promptText = "Name"
+                        promptText = "name"
                         textProperty().onChange {
                             selectedPath?.let {
                                 it.name = text
@@ -398,7 +396,7 @@ class ImageCalc : View("ImageCalc") {
                     }
                     pathGroup = textfield {
                         hgrow = Priority.ALWAYS
-                        promptText = "Gruppe"
+                        promptText = "group"
                         textProperty().onChange {
                             if (text.isNotEmpty()) {
                                 selectedPaths.forEach { g -> g.group = text }
@@ -411,14 +409,14 @@ class ImageCalc : View("ImageCalc") {
                 hbox {
                     spacing = 5.0
 
-                    button("Pfad entfernen") { action {
+                    button("remove path") { action {
                         selectedPath.let { paths.remove(it); reloadLast() }
                     } }
 
                     removePointField = textfield {
                         prefWidth = 50.0
                     }
-                    button("Punkt entfernen") { action { removePointField.text.toIntOrNull()?.let {
+                    button("remove point") { action { removePointField.text.toIntOrNull()?.let {
                         removeLastPoint(i = it)
                     } } }
                 }
@@ -560,8 +558,8 @@ class ImageCalc : View("ImageCalc") {
             val ml2 = l.ml(m)
 
             s = s
-                .rw("iw", img.width.format())
-                .rw("ih", img.height.format())
+                .rw("rw", img.width.format())
+                .rw("rh", img.height.format())
                 .rw("path", file.path)
                 .rw("name", file.name)
                 .rw("extension", file.name)
@@ -600,7 +598,7 @@ class ImageCalc : View("ImageCalc") {
         when (t) {
             "point" -> selectedPath?.points?.add(snap?.copy() ?: x / w() point y / h())
             "path" -> {
-                paths.add(ImagePath("Pfad $pathCount", pathColor(paths.size), "a").apply {
+                paths.add(ImagePath("path $pathCount", pathColor(paths.size), "a").apply {
                     points.add(snap?.copy() ?: x / w() point y / h())
                     Platform.runLater { pathView.selectionModel.clearSelection(); pathView.selectionModel.select(this) }
                 })
@@ -726,7 +724,7 @@ class ImageCalc : View("ImageCalc") {
 
     private fun loadImagesDialog(start: Boolean = false, directory: Boolean) {
         if (directory) DirectoryChooser().let { f ->
-            f.title = "Ordner Öffnen..."
+            f.title = "Open Folder"
 
             Platform.runLater {
                 f.showDialog(stage)?.let {
@@ -737,10 +735,10 @@ class ImageCalc : View("ImageCalc") {
             }
         }
         else FileChooser().let { f ->
-            f.title = "Datei Öffnen..."
+            f.title = "Open File"
             f.extensionFilters.add(
                 FileChooser.ExtensionFilter(
-                    "Bilder (PNG, JPG, JPEG)",
+                    "Images (PNG, JPG, JPEG)",
                     "*.png",
                     "*.jpg",
                     "*.JPG",
