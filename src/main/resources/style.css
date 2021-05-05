@@ -1,0 +1,19 @@
+.orange { -fx-background-color: #FFCF68; }
+.orange:hover { -fx-background-color: #FFDB80; }
+
+.pink { -fx-background-color: #FF98D9; }
+.pink:hover { -fx-background-color: #FFC3E9; }
+
+.blue { -fx-background-color: #86D9FF; }
+.blue:hover { -fx-background-color: #AAEBFF; }
+
+.green { -fx-background-color: #96FF79; }
+.green:hover { -fx-background-color: #D3FFBB; }
+
+.green { -fx-background-color: #FF8571; }
+.green:hover { -fx-background-color: #FFB899; }
+
+.selected {
+    -fx-border-width: 2px;
+    -fx-border-color: blue;
+}

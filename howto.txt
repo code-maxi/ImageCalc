@@ -1,0 +1,37 @@
+
+Insections:
+1 | 1 | -0.5 | -0.5 | 4
+
+-------------------
+Mit diesem tool kannst du die Berührungsvektoren für ein Objekt bemessen:
+
+Wähle das Objekt mit Pfaden aus, so dass die Flächen der Pfade das Objekt überdecken. Die Pfaden dürfen dabei nicht konkav sein.
+-------------------
+
+_______________________________
+insectPoints = arrayOf(
+<
+    arrayOf( // #{n}`
+        Vector(#{x}[w=8], #{y}[w=7]), // Punkt #{i}`
+    ),
+>
+)
+_________________________________
+
+
+
+
+Shots:
+1 | 1 | -0.5 | -0.5 | 4
+
+------------------
+Mit diesem Tool kannst du Schüsse genau berechnen:
+
+Füge für jeden Schuss einen Pfad mit zwei Punkten hinzu. Der erste Punkt ist die Position des entstehenden Schusses und die Linie zwischen den beiden Punkten ist die Richtung, in die der Schuss abgeschossen wird. Wenn du einen gerade nach oben verlaufenden Schuss haben willst, entferne den 2. Punkt und gib bei "[...]" "-PI/2.0" ein. Das ist dann genauer.
+------------------
+
+______________________________
+arrayOf(<
+    ShotItem([target], ShotData.[schusstyp], `[0-] #{x}[w=7] vec #{y}[w=7]`, `[0-]#{da}`), // #{n} (#{c}),>
+)
+______________________________

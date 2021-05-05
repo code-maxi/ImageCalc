@@ -1,0 +1,39 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.4.32'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.0.8'
+}
+
+mainClassName = 'LaunchUI'
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+compileKotlin {
+    kotlinOptions.jvmTarget = 1.8
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'LaunchUI'
+    }
+
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+    implementation 'no.tornado:tornadofx:1.7.20'
+}
+
+javafx {
+    version = "11"
+    modules = [ 'javafx.controls', 'javafx.fxml' ]
+}
