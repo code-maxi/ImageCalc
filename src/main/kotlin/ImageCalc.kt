@@ -25,6 +25,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.system.exitProcess
 
+const val calcExtension = "imgclc"
 
 lateinit var stage: Stage
 lateinit var calc: ImageCalc
@@ -88,6 +89,12 @@ data class TreeFile(val file: File? = null, val name: String = file?.name ?: "Ge
     override fun toString() = name
 }
 
+data class Filter<T : Any>(
+    val n: String,
+    val pattern: Regex,
+    val f: (MatchResult, T, Int, List<T>) -> Boolean
+)
+
 data class ImagePathData(val name: String, val color: PathColor, val group: String, val points: Array<Point>) : Serializable
 data class ImagePathsData(val paths: Array<ImagePathData>) : Serializable {
     fun code(): String {
@@ -112,13 +119,14 @@ class ImageCalc : View("ImageCalc") {
     lateinit var canvas: CalcCanvas
     lateinit var img: Image
 
-    val padding = 200.0
+    var padding = 200.0
 
     var snapRadius = 12.0
 
     var autoReload = true
 
     lateinit var slider: Slider
+    lateinit var paddingSlider: Slider
 
     lateinit var ta: TextArea
     lateinit var te: TextArea
@@ -193,11 +201,17 @@ class ImageCalc : View("ImageCalc") {
             hbox {
                 alignment = Pos.CENTER_LEFT
                 spacing = 5.0
-            }
-            slider = slider(0.0, 1.0, 0.5, Orientation.HORIZONTAL) {
-                prefWidth = 300.0
-                valueProperty().onChange {
-                    canvas.setSizes()
+
+                slider = slider(0.0, 1.0, 0.5, Orientation.HORIZONTAL) {
+                    hgrow = Priority.ALWAYS
+                    valueProperty().onChange { canvas.setSizes() }
+                }
+                paddingSlider = slider(0.0, 1.0, 0.5, Orientation.HORIZONTAL) {
+                    hgrow = Priority.ALWAYS
+                    valueProperty().onChange {
+                        this@ImageCalc.padding = 400.0 * it
+                        canvas.setSizes()
+                    }
                 }
             }
             flowpane {
@@ -214,11 +228,11 @@ class ImageCalc : View("ImageCalc") {
 
             hbox {
                 spacing = 10.0
-                wField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Width" }
-                hField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Height" }
-                txField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "X" }
-                tyField = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "Y" }
-                nachkomma = textfield { textProperty().onChange { reload() }; prefWidth = 60.0; promptText = "x.[n]" }
+                wField = textfield { textProperty().onChange { refresh() }; prefWidth = 60.0; promptText = "Width" }
+                hField = textfield { textProperty().onChange { refresh() }; prefWidth = 60.0; promptText = "Height" }
+                txField = textfield { textProperty().onChange { refresh() }; prefWidth = 60.0; promptText = "X" }
+                tyField = textfield { textProperty().onChange { refresh() }; prefWidth = 60.0; promptText = "Y" }
+                nachkomma = textfield { textProperty().onChange { refresh() }; prefWidth = 60.0; promptText = "x.[n]" }
             }
 
             splitpane(Orientation.VERTICAL) {
@@ -234,7 +248,7 @@ class ImageCalc : View("ImageCalc") {
                 extension: #{extension}
                 resolution: #{rw}px x #{rh}px
                     
-                <#{n} (Farbe: #{c} | Gruppe: '#{g}'):
+                <[range-last:1-1][group:b]#{n} (Farbe: #{c} | Gruppe: '#{g}'):
                     `Punkt #{i}: (#{x} | #{y})
                     `
                 >
@@ -246,7 +260,7 @@ class ImageCalc : View("ImageCalc") {
 
                     promptText = "code pattern"
                     font = Font.font("monospace")
-                    textProperty().onChange { reload() }
+                    textProperty().onChange { refresh() }
                 }
                 ta = textarea {
                     hgrow = Priority.ALWAYS
@@ -275,17 +289,60 @@ class ImageCalc : View("ImageCalc") {
                         setOnKeyPressed {
                             if (it.code == KeyCode.S && it.isControlDown) {
                                 decodePaths()
-                                reload()
+                                refresh()
                             }
                         }
                     }
 
-                    button("update") {
-                        action {
-                            decodePaths()
-                            reload()
+                    hbox {
+                        spacing = 5.0
+                        button("update") {
+                            action {
+                                decodePaths()
+                                refresh()
+                            }
+                        }
+                        button("open") {
+                            action {
+                                Platform.runLater {
+                                    FileChooser().apply {
+                                        title = "Open Data File"
+                                        extensionFilters.add(
+                                            FileChooser.ExtensionFilter(
+                                                "ImageCalc",
+                                                "*.$calcExtension"
+                                            )
+                                        )
+                                    }.showOpenDialog(stage)?.let {
+                                        decodePaths(it.readText())
+                                        refresh()
+                                    }
+                                }
+                            }
+                        }
+                        button("save") {
+                            action {
+                                Platform.runLater {
+                                    FileChooser().apply {
+                                        title = "Save Data"
+                                        extensionFilters.add(
+                                            FileChooser.ExtensionFilter(
+                                                "ImageCalc",
+                                                "*.$calcExtension"
+                                            )
+                                        )
+                                    }.showSaveDialog(stage)?.let { f ->
+                                        File(f.absolutePath+".$calcExtension").let {
+                                            f.delete()
+                                            it.createNewFile()
+                                            it.writeText(codePaths())
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+
                 }
             }
         }
@@ -336,7 +393,7 @@ class ImageCalc : View("ImageCalc") {
                         } }
                     }
                     val folderCheck = CheckBox("folder")
-                    button("open") { action { loadImagesDialog(false, folderCheck.isSelected) } }
+                    button("open") { action { loadImagesDialog(folderCheck.isSelected) } }
                     this += folderCheck
                 }
             }
@@ -368,7 +425,7 @@ class ImageCalc : View("ImageCalc") {
                         reloadLast()
                         canvas.paint()
                     }
-                    items.onChange { reload() }
+                    items.onChange { this@ImageCalc.refresh() }
                 }
 
                 visiblePath = checkbox("visible") {
@@ -377,7 +434,7 @@ class ImageCalc : View("ImageCalc") {
                             pathView.selectionModel.selectedItems?.forEach { it.visible = isSelected }
                             pathView.refresh()
                         }
-                        reload()
+                        refresh()
                     }
                 }
 
@@ -390,7 +447,7 @@ class ImageCalc : View("ImageCalc") {
                         textProperty().onChange {
                             selectedPath?.let {
                                 it.name = text
-                                reload()
+                                refresh()
                             }
                         }
                     }
@@ -400,7 +457,7 @@ class ImageCalc : View("ImageCalc") {
                         textProperty().onChange {
                             if (text.isNotEmpty()) {
                                 selectedPaths.forEach { g -> g.group = text }
-                                reload()
+                                refresh()
                             }
                         }
                     }
@@ -447,13 +504,13 @@ class ImageCalc : View("ImageCalc") {
                     prefHeight = canvas.height
                 }
             }
-            reload()
+            refresh()
         }
     }
 
     fun Double.format() = nachkomma.text.toIntOrNull()?.let { "%.${it}f".format(this).replace(",", ".") } ?: toInt().toString()
     
-    fun reload(refresh: Boolean = true) {
+    fun refresh() {
         Platform.runLater {
             fun String.form() = this
                 .replace("~", "\n")
@@ -467,47 +524,74 @@ class ImageCalc : View("ImageCalc") {
 
             s = s.replace("\n", "~")
 
-            val range = "(\\[(?<z1>\\d+)?(?<o>-)?(?<z2>\\d+)?])?"
+            fun <T : Any> defaultFilters() = arrayOf<Filter<T>>(
+                Filter("nth", "(?<nth>\\d+)".toRegex()) { m, _, i, _ ->
+                    m.groups["nth"]?.value?.toIntOrNull()?.let { it == i } ?: true },
 
-            fun <T> String.rangeString(
-                arr: List<T>,
+                Filter("nth", "(?<nth>\\d+)".toRegex()) { m, _, i, _ ->
+                    m.groups["nth"]?.value?.toIntOrNull()?.let { it == i } ?: true },
+
+                Filter("last-nth", "(?<lastnth>\\d+)".toRegex()) { m, _, i, a ->
+                    m.groups["lastnth"]?.value?.toIntOrNull()?.let { a.size-1 - it == i } ?: true },
+
+                Filter("range", "(?<z1>\\d+)-(?<z2>\\d)".toRegex()) { m, _, i, _ ->
+                    val z1 = m.groups["z1"]?.value?.toIntOrNull()
+                    val z2 = m.groups["z2"]?.value?.toIntOrNull()
+                    if (z1 != null && z2 != null) i >= z1 && i <= z2 else true
+                },
+                Filter("range-last", "(?<z1>\\d+)-(?<z2>\\d)".toRegex()) { m, _, i, a ->
+                    val z1 = m.groups["z1"]?.value?.toIntOrNull()
+                    val z2 = m.groups["z2"]?.value?.toIntOrNull()
+                    if (z1 != null && z2 != null) i >= z1 && i <= a.size-1 - z2 else true
+                }
+            )
+
+            val filterPattern = "\\s*[a-z\\-]+?:.+?\\s*\\|?\\s*".toRegex()
+
+            fun <T : Any> String.filterString(
+                list: List<T>,
                 op: Pair<String, String> = "-" to "-",
-                pattern: Regex = "${op.first}$range(?<text>.+?)${op.second}".toRegex(),
-                filter: (MatchResult, T) -> Boolean = { _, _ -> true },
+                filters: Array<Filter<T>> = defaultFilters(),
                 f: (T, String, Int) -> String
-            ) = replace(pattern) {
-                    val z1 = it.groups["z1"]?.value?.toIntOrNull()
-                    val o = it.groups["o"]
-                    val z2 = it.groups["z2"]?.value?.toIntOrNull()
+            ) = replace("${op.first}(\\[(?<filters>(${filterPattern.pattern})+)])?(?<text>.+?)${op.second}".toRegex()) { match ->
+                var ss = ""
 
-                    var st = ""
+                val mf = hashMapOf<String, String>()
 
-                    if (o != null && z1 != null && z2 == null) {
-                        arr.getOrNull(z1)?.let { e ->
-                            if (filter(it, e)) st += f(e, it.groups["text"]!!.value, arr.indexOf(e)) }
+                match.groups["filters"]?.value?.trim()?.split("|")?.forEach { o ->
+                    "(?<a>[a-z\\-]+?):(?<b>.+?)".toRegex().matchEntire(o.trim())?.let {
+                        mf[it.groups["a"]!!.value] = it.groups["b"]!!.value
                     }
-                    else if (o != null && z1 == null && z2 != null) {
-                        arr.getOrNull(arr.size-1 - z2)?.let { e ->
-                            if (filter(it, e)) st += f(e, it.groups["text"]!!.value, arr.indexOf(e)) }
-                    }
-                    else if ((o != null && z1 != null && z2 != null) || (o == null && z1 == null && z2 == null)) {
-                        arr.forEachIndexed { ind, t ->
-                            if (ind >= (z1 ?: 0) && ind < arr.size - (z2 ?: 0) && filter(it, t))
-                                st += f(t, it.groups["text"]!!.value, ind)
+                }
+
+                list.forEachIndexed { i, o ->
+                    var isTaken = true
+                    mf.forEach { m ->
+                        filters.find { it.n == m.key }?.let {
+                            it.pattern.matchEntire(m.value)?.let { r ->
+                                isTaken = isTaken && it.f(r, o, i, list)
+                            }
                         }
-                    } else arr.filter { i -> filter(it, i) }.forEachIndexed { ind, t ->
-                        st += f(t, it.groups["text"]!!.value, ind)
                     }
-                    st
+                    if (isTaken) ss += f(o, match.groups["text"]!!.value, i)
                 }
 
-            s = s.rangeString(
-                pathsFiltered(),
-                pattern = "<$range(\\[(?<group>[\\w;]+)])?(?<text>.+?)>".toRegex(),
-                filter = { result, o ->
-                    val r = result.groups["group"]?.value?.split(";")
-                    r?.contains(o.group) ?: true
-                }
+                ss
+            }
+
+            s = s.filterString(
+                pathsFiltered().toList(),
+                "<" to ">",
+                defaultFilters<ImageCalc.ImagePath>() + arrayOf(
+                    Filter("name", "(?<name>.+)".toRegex()) { m, o, _, _ ->
+                        m.groups["name"]?.value?.let { it == o.name } ?: true },
+                    Filter("group", "(?<group>.+)".toRegex()) { m, o, _, _ ->
+                        m.groups["group"]?.value?.let { it == o.group } ?: true },
+                    Filter("color", "(?<color>.+)".toRegex()) { m, o, _, _ ->
+                        m.groups["color"]?.value?.let {
+                            PathColor.values().find { f -> f.s == it } }?.let { it == o.color } ?: true
+                    }
+                )
             ) { o, t, i ->
                 val l = o.points.copyAs { fr(it) }
                 val m = l.m()
@@ -515,28 +599,31 @@ class ImageCalc : View("ImageCalc") {
                 val ml = l.ml(m)
                 val ml2 = l.ml(m)
                 t
-                    .rangeString(o.points, "`" to "`") { oo, tt, ii ->
+                    .filterString(o.points, "`" to "`") { oo, tt, ii ->
                         val p = oo.f()
 
                         val np = if (ii < o.points.size-1) o.points[ii+1].f() else null
 
-                        val dl = if (np != null) (p delta np).l().format() else "[...]"
-                        val da = if (np != null) (p delta np).a().format() else "[...]"
-                        val dx = if (np != null) (p delta np).x.format() else "[...]"
-                        val dy = if (np != null) (p delta np).y.format() else "[...]"
+                        val dl = if (np != null) (p delta np).l().format() else "[ERROR]"
+                        val da = if (np != null) (p delta np).a().format() else "[ERROR]"
+                        val dx = if (np != null) (p delta np).x.format() else "[ERROR]"
+                        val dy = if (np != null) (p delta np).y.format() else "[ERROR]"
 
                         println(ii)
 
                         tt
                             .rw("x", p.x.format())
                             .rw("y", p.y.format())
+                            .rw("nx", np?.x?.format() ?: "[ERROR]")
+                            .rw("ny", np?.y?.format() ?: "[ERROR]")
                             .rw("dx", dx)
                             .rw("dy", dy)
                             .rw("dl", dl)
                             .rw("da", da)
-                            .rw("id", (ii+1).toString())
+                            .rw("i2", (ii+1).toString())
                             .rw("i", ii.toString())
                     }
+                    .rw("i2", (i+1).toString())
                     .rw("i", i.toString())
                     .rw("c", o.color.s)
                     .rw("n", o.name)
@@ -553,9 +640,7 @@ class ImageCalc : View("ImageCalc") {
             paths.forEach { l += it.points.copyAs { fr(it) } }
 
             val m = l.m()
-            val m2 = l.m(-1)
             val ml = l.ml(m)
-            val ml2 = l.ml(m)
 
             s = s
                 .rw("rw", img.width.format())
@@ -566,9 +651,6 @@ class ImageCalc : View("ImageCalc") {
                 .rw("mx", m.x.format())
                 .rw("my", m.y.format())
                 .rw("ml", ml.format())
-                .rw("m2x", m2.x.format())
-                .rw("m2y", m2.y.format())
-                .rw("m2l", ml2.format())
 
             s = s.form()
 
@@ -577,7 +659,7 @@ class ImageCalc : View("ImageCalc") {
 
             reloadLast()
 
-            if (refresh) pathView.refresh()
+            pathView.refresh()
             canvas.paint()
         }
     }
@@ -587,7 +669,7 @@ class ImageCalc : View("ImageCalc") {
             if (l.isNotEmpty()) (i ?: l.size-1).let { if (it >= 0 && it < l.size) l.removeAt(it) }
             else paths.remove(selectedPath)
         }
-        if (reload) reload()
+        if (reload) refresh()
     }
 
     private fun reloadLast() {
@@ -623,7 +705,7 @@ class ImageCalc : View("ImageCalc") {
                     MouseButton.MIDDLE -> removeLastPoint(reload = false)
                 }
 
-                reload()
+                refresh()
             }
             setOnMouseExited {
                 mouse = null
@@ -700,7 +782,7 @@ class ImageCalc : View("ImageCalc") {
                         lineTo(w(), axisPoint.y)
                         stroke()
 
-                        fill = Color.rgb(255,0,0, 0.5)
+                        fill = Color.rgb(255,0,0)
                         fillOval(axisPoint.x - 5.0, axisPoint.y - 5.0, 10.0, 10.0)
 
                         pathsFiltered().forEach { it.paint(gc) }
@@ -722,15 +804,13 @@ class ImageCalc : View("ImageCalc") {
         }
     }
 
-    private fun loadImagesDialog(start: Boolean = false, directory: Boolean) {
+    private fun loadImagesDialog(directory: Boolean) {
         if (directory) DirectoryChooser().let { f ->
             f.title = "Open Folder"
 
             Platform.runLater {
                 f.showDialog(stage)?.let {
                     thread { thread { loadImage(it) } }
-                } ?: run {
-                    if (start) stage.close()
                 }
             }
         }
@@ -749,16 +829,12 @@ class ImageCalc : View("ImageCalc") {
             Platform.runLater {
                 f.showOpenMultipleDialog(stage)?.forEach {
                     thread { thread { loadImage(it) } }
-                } ?: run {
-                    if (start) stage.close()
                 }
             }
         }
     }
 
     private fun loadImage(f: File, p: TreeItem<TreeFile> = tree.root, c: Int = 0) {
-        println("${f.absoluteFile} --- $c")
-
         if (f.isDirectory || acceptedExtensions.contains(f.extension)) Platform.runLater {
             p.children.add(TreeItem(TreeFile(f)).apply {
                 isExpanded = false
@@ -771,21 +847,36 @@ class ImageCalc : View("ImageCalc") {
                     }
                 } else {
                     file = f
-                    tree.selectionModel.select(this)
                 }
             })
+        }
+        if (c == 0) {
+            try {
+                thread {
+                    Thread.sleep(2000)
+                    Platform.runLater {
+                        var e = tree.root
+                        while (e.value.file?.isDirectory != false) {
+                            e.isExpanded = true
+                            e = e.children.first()
+                        }
+                        tree.selectionModel.select(e)
+                        reloadImage()
+                    }
+                }
+            } catch (e: java.lang.Exception) {}
         }
     }
 
     fun w() = canvas.width - padding*2.0
     fun h() = canvas.height - padding*2.0
 
-    fun codePaths() = ImagePathsData(paths.copyAs { it.code() }.toTypedArray()).code()
+    private fun codePaths() = ImagePathsData(paths.copyAs { it.code() }.toTypedArray()).code()
 
-    fun decodePaths() {
-        paths.clear()
-        decode(tc.text)?.let {
+    private fun decodePaths(t: String = tc.text) {
+        decode(t)?.let {
             println(it)
+            paths.clear()
             it.paths.forEach { paths.add(ImagePath(it.name, it.color, it.group).apply {
                 points = it.points.arrayList()
             }) }
@@ -816,7 +907,7 @@ class ImageCalc : View("ImageCalc") {
                     if (npr != null) {
                         if (lineCheck.isSelected) {
                             lineWidth = if (selectedPath == this@ImagePath) 7.0 else 5.0
-                            stroke = if (selectedPath == this@ImagePath) Color.RED else Color.rgb(0,0,0, 0.5)
+                            stroke = if (selectedPath == this@ImagePath) Color.RED else Color.rgb(0,0,0, 0.4)
 
                             strokeLine(pr.x, pr.y, npr.x, npr.y)
 
@@ -835,8 +926,8 @@ class ImageCalc : View("ImageCalc") {
                                 pr.y, "${p.f().x.format()} | ${p.f().y.format()}"
                     )
                     if (numberCheck.isSelected && oc) paintBadge(
-                        pr.x - 30.0 point
-                                pr.y, i.toString(), Color.rgb(0,0,200, 0.4)
+                        pr.x - 23.0 point
+                                pr.y, i.toString(), Color.rgb(0,0,200, 0.6)
                     )
                 }
 
@@ -854,7 +945,7 @@ class ImageCalc : View("ImageCalc") {
     }
 }
 
-fun GraphicsContext.paintBadge(p: Point, s: String, bc: Color = Color.rgb(0,0,0, 0.3)) {
+fun GraphicsContext.paintBadge(p: Point, s: String, bc: Color = Color.rgb(0,0,0, 0.5)) {
     fill = bc
     stroke = Color.WHITE
     lineWidth = 1.0
@@ -912,4 +1003,9 @@ fun ArrayList<Point>.m(d: Int = 0): Point {
     forEach { p += it }
     p /= (size+d).toDouble()
     return p
+}
+fun File.rename(s: (File) -> String) {
+    val newname = "$parent${File.separator}${s(this)}"
+    if (!renameTo(File(newname)))
+        error("File '$this' couldn't be renamed to '$newname'")
 }
